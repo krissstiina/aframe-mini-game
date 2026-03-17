@@ -143,6 +143,39 @@
         if (el) el.innerHTML = `ЖЕМЧУГ: <b>${GAME.score}/${GAME.goal}</b>  •  ВРЕМЯ: <b>${GAME.timeLeft}s</b>`;
       }
 
+      async function requestMotionPermissionIfNeeded() {
+        // iOS требует явный запрос разрешения на ориентацию/движение из user-gesture.
+        try {
+          if (typeof DeviceOrientationEvent !== 'undefined' &&
+              typeof DeviceOrientationEvent.requestPermission === 'function') {
+            const res = await DeviceOrientationEvent.requestPermission();
+            if (res !== 'granted') return false;
+          }
+        } catch (_) {
+          return false;
+        }
+
+        try {
+          if (typeof DeviceMotionEvent !== 'undefined' &&
+              typeof DeviceMotionEvent.requestPermission === 'function') {
+            const res = await DeviceMotionEvent.requestPermission();
+            if (res !== 'granted') return false;
+          }
+        } catch (_) {
+          // Motion может быть недоступен — ориентации обычно достаточно
+        }
+
+        return true;
+      }
+
+      function enablePhoneAiming() {
+        const cam = document.querySelector('#camera');
+        if (!cam) return;
+        // AR.js look controls (использует ориентацию устройства)
+        cam.setAttribute('arjs-look-controls', 'enabled: true');
+        cam.setAttribute('look-controls', 'enabled: true');
+      }
+
       function sfx(volume = 0.55) {
         const a = document.querySelector('#snd-shot');
         if (!a) return;
@@ -196,7 +229,10 @@
             <a-entity light="type: directional; intensity: 0.85; color: #7ad7ff" position="1 4 3"></a-entity>
 
             <a-entity id="cameraRig">
-              <a-camera id="camera" position="0 1.6 0" look-controls="enabled: false">
+              <a-camera id="camera"
+                        position="0 1.6 0"
+                        look-controls="enabled: false"
+                        arjs-look-controls="enabled: false">
                 <a-entity id="cursor"
                           cursor="rayOrigin: entity; fuse: false"
                           raycaster="objects: .shootable; far: 20"
@@ -225,7 +261,12 @@
       }
 
       window.startGame = function () {
-        ensureScene();
+        // В клике запрашиваем разрешения и включаем “aim by phone”.
+        requestMotionPermissionIfNeeded().then((granted) => {
+          ensureScene();
+          if (granted) enablePhoneAiming();
+        });
+
         GAME.state = 'playing';
         GAME.score = 0;
         GAME.timeLeft = 35;
