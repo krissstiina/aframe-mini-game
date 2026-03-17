@@ -140,7 +140,9 @@
 
       function setHud() {
         const el = document.getElementById('hudText');
-        if (el) el.innerHTML = `ЖЕМЧУГ: <b>${GAME.score}/${GAME.goal}</b>  •  ВРЕМЯ: <b>${GAME.timeLeft}s</b>`;
+        if (!el) return;
+        const seconds = Math.max(0, Math.ceil(GAME.timeLeft));
+        el.innerHTML = `ЖЕМЧУГ: <b>${GAME.score}/${GAME.goal}</b>  •  ВРЕМЯ: <b>${seconds}s</b>`;
       }
 
       async function requestMotionPermissionIfNeeded() {
@@ -296,15 +298,8 @@
       AFRAME.registerComponent('timer', {
         tick: function (t, dt) {
           if (GAME.state !== 'playing') return;
-          // Плавное уменьшение времени каждый кадр, а не раз в секунду
           GAME.timeLeft = Math.max(0, GAME.timeLeft - dt / 1000);
-          // Округляем до целых секунд наверх, чтобы игрок видел “живой” таймер
-          const rounded = Math.ceil(GAME.timeLeft);
-          if (rounded !== Math.ceil(GAME.timeLeft + dt / 1000)) {
-            setHud();
-          } else {
-            setHud();
-          }
+          setHud();
           if (GAME.score >= GAME.goal) endGame('WIN');
           else if (GAME.timeLeft <= 0) endGame('LOSE');
         }
