@@ -119,6 +119,15 @@
         pointer-events: none;
       }
       #flash.on { opacity: 1; }
+
+      /* iOS permission dialog (A-Frame) must be clickable */
+      .a-dialog {
+        z-index: 99999 !important;
+        pointer-events: auto !important;
+      }
+      .a-dialog * {
+        pointer-events: auto !important;
+      }
     </style>
 
     <script>
@@ -187,7 +196,7 @@
             <a-entity light="type: directional; intensity: 0.85; color: #7ad7ff" position="1 4 3"></a-entity>
 
             <a-entity id="cameraRig">
-              <a-camera id="camera" position="0 1.6 0">
+              <a-camera id="camera" position="0 1.6 0" look-controls="enabled: false">
                 <a-entity id="cursor"
                           cursor="rayOrigin: entity; fuse: false"
                           raycaster="objects: .shootable; far: 20"
