@@ -153,7 +153,70 @@
         document.querySelectorAll('.pearl, .jelly').forEach(el => el.parentNode && el.parentNode.removeChild(el));
       }
 
+      function ensureScene() {
+        // Создаем AR-сцену только после клика, чтобы iOS корректно показал системное разрешение камеры.
+        if (document.querySelector('a-scene')) return;
+        const wrap = document.getElementById('sceneWrap');
+        if (!wrap) return;
+
+        wrap.innerHTML = `
+          <a-scene
+            embedded
+            vr-mode-ui="enabled: false"
+            renderer="antialias: true; alpha: true"
+            physics="debug: false; gravity: 0 -0.3 0"
+            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; trackingMethod: best;"
+            timer
+            pearl-spawner
+            style="position: fixed; inset: 0; z-index: 1;"
+          >
+            <a-assets>
+              <img id="tex-sky" src="assets/underwater.jpg?v=2">
+              <img id="img-ui" src="assets/pearl-icon.png?v=2">
+              <a-asset-item id="mdl-harpoon" src="assets/harpoon.glb?v=2"></a-asset-item>
+              <audio id="snd-shot" src="assets/harpoon.mp3?v=2" preload="auto"></audio>
+            </a-assets>
+
+            <a-sky src="#tex-sky" material="opacity: 0.02; transparent: true;"></a-sky>
+
+            <a-plane id="ground" rotation="-90 0 0" position="0 0 -3" width="30" height="30"
+                     static-body
+                     material="src: #tex-sky; repeat: 6 6; color: #083246; opacity: 0.75; transparent: true"></a-plane>
+
+            <a-entity light="type: ambient; intensity: 0.95; color: #b8f2ff"></a-entity>
+            <a-entity light="type: directional; intensity: 0.85; color: #7ad7ff" position="1 4 3"></a-entity>
+
+            <a-entity id="cameraRig">
+              <a-camera id="camera" position="0 1.6 0">
+                <a-entity id="cursor"
+                          cursor="rayOrigin: entity; fuse: false"
+                          raycaster="objects: .shootable; far: 20"
+                          position="0 0 -1"
+                          geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.02"
+                          material="opacity: 0; transparent: true">
+                </a-entity>
+              </a-camera>
+
+              <a-entity id="gun"
+                        position="0 0.95 -0.8"
+                        rotation="0 180 0"
+                        scale="0.18 0.18 0.18"
+                        gltf-model="#mdl-harpoon"
+                        animation__idle="property: rotation; to: 0 190 0; dur: 1100; dir: alternate; loop: true; easing: easeInOutSine"
+                        animation__fire="property: position; from: 0 0.95 -0.8; to: 0 0.95 -0.72; dur: 60; dir: alternate; repeat: 1; startEvents: fire">
+              </a-entity>
+            </a-entity>
+
+            <!-- A-Frame изображение (требование) отдельно от оружия -->
+            <a-image src="#img-ui" position="-0.8 2.2 -2.0" width="0.55" height="0.55" opacity="0.85"></a-image>
+
+            <a-text value="tap to shoot" position="0 2.2 -2.2" align="center" width="6" color="#fff2b1"></a-text>
+          </a-scene>
+        `;
+      }
+
       window.startGame = function () {
+        ensureScene();
         GAME.state = 'playing';
         GAME.score = 0;
         GAME.timeLeft = 35;
@@ -334,58 +397,7 @@
       </div>
     </div>
 
-    <a-scene
-      embedded
-      vr-mode-ui="enabled: false"
-      renderer="antialias: true; alpha: true"
-      physics="debug: false; gravity: 0 -0.3 0"
-      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; trackingMethod: best;"
-      timer
-      pearl-spawner
-    >
-      <a-assets>
-        <img id="tex-sky" src="assets/underwater.jpg?v=2">
-        <img id="img-ui" src="assets/pearl-icon.png?v=2">
-        <a-asset-item id="mdl-harpoon" src="assets/harpoon.glb?v=2"></a-asset-item>
-        <audio id="snd-shot" src="assets/harpoon.mp3?v=2" preload="auto"></audio>
-      </a-assets>
-
-      <!-- a-sky (требование). В AR оставляем почти прозрачным, чтобы не перекрывал камеру -->
-      <a-sky src="#tex-sky" material="opacity: 0.02; transparent: true;"></a-sky>
-
-      <!-- Земля (виртуальное “дно”) + физика -->
-      <a-plane id="ground" rotation="-90 0 0" position="0 0 -3" width="30" height="30"
-               static-body
-               material="src: #tex-sky; repeat: 6 6; color: #083246; opacity: 0.75; transparent: true"></a-plane>
-
-      <!-- Свет -->
-      <a-entity light="type: ambient; intensity: 0.95; color: #b8f2ff"></a-entity>
-      <a-entity light="type: directional; intensity: 0.85; color: #7ad7ff" position="1 4 3"></a-entity>
-
-      <!-- Камера (AR) + невидимый курсор-рейкастер из центра -->
-      <a-entity id="cameraRig">
-        <a-camera id="camera" position="0 1.6 0">
-          <a-entity id="cursor"
-                    cursor="rayOrigin: entity; fuse: false"
-                    raycaster="objects: .shootable; far: 20"
-                    position="0 0 -1"
-                    geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.02"
-                    material="opacity: 0; transparent: true">
-          </a-entity>
-        </a-camera>
-
-        <!-- “Оружие”/фигура по тематике: 3D модель (Blender) как гарпун/ракушка -->
-        <!-- Трансформация предок/потомок: cameraRig -> gun -> deco image -->
-        <a-entity id="gun" position="0 0.95 -0.8" rotation="0 180 0" scale="0.18 0.18 0.18"
-                  gltf-model="#mdl-harpoon"
-                  animation__idle="property: rotation; to: 0 190 0; dur: 1100; dir: alternate; loop: true; easing: easeInOutSine"
-                  animation__fire="property: position; from: 0 0.95 -0.8; to: 0 0.95 -0.72; dur: 60; dir: alternate; repeat: 1; startEvents: fire">
-          <a-image src="#img-ui" position="0.0 1.1 0.0" width="0.6" height="0.6" opacity="0.9"></a-image>
-        </a-entity>
-      </a-entity>
-
-      <!-- Текст (внутри сцены) -->
-      <a-text value="tap to shoot" position="0 2.2 -2.2" align="center" width="6" color="#fff2b1"></a-text>
-    </a-scene>
+    <!-- Сцена создаётся динамически после нажатия START -->
+    <div id="sceneWrap"></div>
   </body>
 </html>
