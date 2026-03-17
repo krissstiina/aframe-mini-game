@@ -213,10 +213,10 @@
             style="position: fixed; inset: 0; z-index: 1;"
           >
             <a-assets>
-              <img id="tex-sky" src="assets/underwater.jpg?v=2">
-              <img id="img-ui" src="assets/pearl-icon.png?v=2">
-              <a-asset-item id="mdl-harpoon" src="assets/harpoon.glb?v=2"></a-asset-item>
-              <audio id="snd-shot" src="assets/harpoon.mp3?v=2" preload="auto"></audio>
+              <img id="tex-sky" src="assets/underwater.jpg?v=3">
+              <img id="img-ui" src="assets/pearl-icon.png?v=3">
+              <a-asset-item id="mdl-harpoon" src="assets/harpoon.glb?v=3"></a-asset-item>
+              <audio id="snd-shot" src="assets/harpoon.mp3?v=3" preload="auto"></audio>
             </a-assets>
 
             <a-sky src="#tex-sky" material="opacity: 0.02; transparent: true;"></a-sky>
@@ -245,16 +245,17 @@
                           geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.02"
                           material="opacity: 0; transparent: true">
                 </a-entity>
-              </a-camera>
 
-              <a-entity id="gun"
-                        position="0 0.95 -0.8"
-                        rotation="0 180 0"
-                        scale="0.18 0.18 0.18"
-                        gltf-model="#mdl-harpoon"
-                        animation__idle="property: rotation; to: 0 190 0; dur: 1100; dir: alternate; loop: true; easing: easeInOutSine"
-                        animation__fire="property: position; from: 0 0.95 -0.8; to: 0 0.95 -0.72; dur: 60; dir: alternate; repeat: 1; startEvents: fire">
-              </a-entity>
+                <!-- Гарпун прикреплён к камере, поэтому всегда виден -->
+                <a-entity id="gun"
+                          position="0.28 -0.35 -0.75"
+                          rotation="-10 190 0"
+                          scale="0.22 0.22 0.22"
+                          gltf-model="#mdl-harpoon"
+                          animation__idle="property: rotation; from: -10 188 0; to: -8 194 0; dur: 900; dir: alternate; loop: true; easing: easeInOutSine"
+                          animation__fire="property: position; from: 0.28 -0.35 -0.75; to: 0.28 -0.35 -0.68; dur: 70; dir: alternate; repeat: 1; startEvents: fire">
+                </a-entity>
+              </a-camera>
             </a-entity>
 
             <a-text value="tap to shoot" position="0 2.2 -2.2" align="center" width="6" color="#fff2b1"></a-text>
@@ -430,7 +431,7 @@
     <div id="screenStart" class="overlay">
       <div class="card">
         <div class="row">
-          <img src="assets/pearl-icon.png?v=2" alt="icon" />
+          <img src="assets/pearl-icon.png?v=3" alt="icon" />
           <div>
             <h2>AR: ОХОТА ЗА ЖЕМЧУГОМ</h2>
             <div style="opacity:0.75; font-size:12px; margin-top:4px;">камера • интерактивность • физика</div>
@@ -447,7 +448,7 @@
     <div id="screenOver" class="overlay hidden">
       <div class="card">
         <div class="row">
-          <img src="assets/pearl-icon.png?v=2" alt="icon" />
+          <img src="assets/pearl-icon.png?v=3" alt="icon" />
           <div>
             <h2 id="finalTitle">ВРЕМЯ ВЫШЛО</h2>
             <div id="finalScore" style="opacity:0.85; margin-top:6px">ЖЕМЧУГ: 0/10</div>
