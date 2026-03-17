@@ -221,9 +221,14 @@
 
             <a-sky src="#tex-sky" material="opacity: 0.02; transparent: true;"></a-sky>
 
-            <a-plane id="ground" rotation="-90 0 0" position="0 0 -3" width="30" height="30"
+            <a-plane id="ground"
+                     rotation="-90 0 0"
+                     position="0 0 -3"
+                     width="30" height="30"
+                     segments-width="64"
+                     segments-height="64"
                      static-body
-                     material="src: #tex-sky; repeat: 6 6; color: #083246; opacity: 0.75; transparent: true"></a-plane>
+                     material="src: #tex-sky; repeat: 2 2; color: #0b3a46; opacity: 0.55; transparent: true; shader: standard; roughness: 1; metalness: 0"></a-plane>
 
             <a-entity light="type: ambient; intensity: 0.95; color: #b8f2ff"></a-entity>
             <a-entity light="type: directional; intensity: 0.85; color: #7ad7ff" position="1 4 3"></a-entity>
@@ -251,9 +256,6 @@
                         animation__fire="property: position; from: 0 0.95 -0.8; to: 0 0.95 -0.72; dur: 60; dir: alternate; repeat: 1; startEvents: fire">
               </a-entity>
             </a-entity>
-
-            <!-- A-Frame изображение (требование) отдельно от оружия -->
-            <a-image src="#img-ui" position="-0.8 2.2 -2.0" width="0.55" height="0.55" opacity="0.85"></a-image>
 
             <a-text value="tap to shoot" position="0 2.2 -2.2" align="center" width="6" color="#fff2b1"></a-text>
           </a-scene>
