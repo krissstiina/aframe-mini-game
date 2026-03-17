@@ -397,12 +397,20 @@
         }
       }
 
+      function isBlockedTarget(target) {
+        if (!target || !target.closest) return true;
+        // не перехватываем системные/встроенные диалоги A-Frame и наши оверлеи
+        if (target.closest('.overlay')) return true;
+        if (target.closest('.a-dialog')) return true;
+        return false;
+      }
+
       document.addEventListener('click', (e) => {
-        if (!e.target.closest || e.target.closest('.overlay')) return;
+        if (isBlockedTarget(e.target)) return;
         shoot();
       });
       document.addEventListener('touchstart', (e) => {
-        if (!e.target.closest || e.target.closest('.overlay')) return;
+        if (isBlockedTarget(e.target)) return;
         e.preventDefault();
         shoot();
       }, { passive: false });
