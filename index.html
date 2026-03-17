@@ -294,14 +294,17 @@
       };
 
       AFRAME.registerComponent('timer', {
-        init: function () { this.acc = 0; },
         tick: function (t, dt) {
           if (GAME.state !== 'playing') return;
-          this.acc += dt;
-          if (this.acc < 1000) return;
-          this.acc = 0;
-          GAME.timeLeft = Math.max(0, GAME.timeLeft - 1);
-          setHud();
+          // Плавное уменьшение времени каждый кадр, а не раз в секунду
+          GAME.timeLeft = Math.max(0, GAME.timeLeft - dt / 1000);
+          // Округляем до целых секунд наверх, чтобы игрок видел “живой” таймер
+          const rounded = Math.ceil(GAME.timeLeft);
+          if (rounded !== Math.ceil(GAME.timeLeft + dt / 1000)) {
+            setHud();
+          } else {
+            setHud();
+          }
           if (GAME.score >= GAME.goal) endGame('WIN');
           else if (GAME.timeLeft <= 0) endGame('LOSE');
         }
