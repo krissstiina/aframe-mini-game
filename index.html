@@ -3,229 +3,180 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>Подводный сбор жемчуга</title>
+    <title>AR: Подводная охота за жемчугом</title>
+
     <!-- Локальные библиотеки (чтобы на телефоне не рвалось CDN) -->
     <script src="vendor/aframe-1.4.0.min.js"></script>
     <script src="vendor/aframe-physics-system-4.2.2.min.js"></script>
+    <script src="vendor/aframe-ar.js"></script>
 
     <style>
-      html, body { width: 100%; height: 100%; margin: 0; background: #001018; overflow: hidden; }
+      html, body { width: 100%; height: 100%; margin: 0; background: #000; overflow: hidden; }
       body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
-      #ui {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 10;
-      }
-
-      .panel {
-        position: fixed;
-        left: 14px;
-        top: 14px;
-        padding: 12px 12px;
-        border-radius: 14px;
-        border: 1px solid rgba(120, 225, 255, 0.28);
-        background: rgba(0, 10, 18, 0.62);
-        color: #b8f2ff;
-        text-shadow: 0 0 12px rgba(120,225,255,0.22);
-        letter-spacing: 0.5px;
-        pointer-events: none;
-      }
-
-      .panel .row { display: flex; gap: 14px; align-items: center; font-size: 13px; line-height: 1.5; }
-      .panel b { color: #fff2b1; font-weight: 900; }
-
       .overlay {
-        position: fixed;
-        inset: 0;
-        display: none;
+        position: fixed; inset: 0;
+        display: flex;
         align-items: center;
         justify-content: center;
         background: radial-gradient(ellipse at center, rgba(0,40,55,0.92) 0%, rgba(0,0,0,0.98) 72%);
-        z-index: 20;
+        z-index: 30;
         pointer-events: all;
       }
-      .overlay.active { display: flex; }
+      .overlay.hidden { display: none; }
 
       .card {
-        width: min(540px, calc(100vw - 28px));
+        width: min(560px, calc(100vw - 28px));
         border-radius: 18px;
         border: 1px solid rgba(120, 225, 255, 0.26);
-        background: rgba(0, 10, 18, 0.70);
+        background: rgba(0, 10, 18, 0.72);
         padding: 18px 18px;
-        color: #cbd5e1;
+        color: rgba(203,213,225,0.92);
         box-shadow: 0 0 50px rgba(120,225,255,0.10);
       }
-      .title {
-        display: flex;
-        gap: 14px;
-        align-items: center;
-        margin-bottom: 10px;
-      }
-      .title img {
+      .row { display: flex; gap: 14px; align-items: center; }
+      .row img {
         width: 48px; height: 48px;
         border-radius: 12px;
         border: 1px solid rgba(255, 242, 177, 0.32);
         box-shadow: 0 0 24px rgba(255, 242, 177, 0.16);
       }
-      .title h2 {
+      h2 {
         margin: 0;
         color: #b8f2ff;
         letter-spacing: 1px;
         text-shadow: 0 0 18px rgba(120,225,255,0.25);
         font-size: 18px;
       }
-      .desc { font-size: 13px; line-height: 1.7; margin: 10px 0 14px; color: rgba(203,213,225,0.92); }
-      .desc .muted { opacity: 0.85; }
-
-      .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+      .desc { font-size: 13px; line-height: 1.7; margin-top: 10px; }
+      .desc b { color: #fff2b1; }
       .btn {
+        margin-top: 14px;
         border: none;
         border-radius: 12px;
         padding: 12px 16px;
         font-size: 14px;
-        font-weight: 800;
+        font-weight: 900;
         letter-spacing: 0.6px;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
         touch-action: manipulation;
+        background: linear-gradient(135deg, #7ef0ff, #22c55e);
+        color: #001018;
       }
-      .btn-primary { background: linear-gradient(135deg, #7ef0ff, #22c55e); color: #001018; }
-      .btn-danger  { background: linear-gradient(135deg, #ff6b6b, #fff2b1); color: #1c0b0b; }
+      .btn-danger { background: linear-gradient(135deg, #ff6b6b, #fff2b1); color: #1c0b0b; }
 
-      .touch {
+      #hud {
         position: fixed;
-        right: 14px;
-        bottom: 14px;
-        display: grid;
-        grid-template-columns: 58px 58px 58px;
-        grid-template-rows: 58px 58px;
-        gap: 10px;
-        pointer-events: all;
-        user-select: none;
+        inset: 0;
+        z-index: 20;
+        pointer-events: none;
       }
-      .touch button {
-        border-radius: 16px;
-        border: 1px solid rgba(120, 225, 255, 0.26);
+      #hudTop {
+        position: fixed; left: 14px; top: 14px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(120, 225, 255, 0.28);
         background: rgba(0, 10, 18, 0.62);
         color: #b8f2ff;
-        font-size: 18px;
-        font-weight: 800;
         text-shadow: 0 0 12px rgba(120,225,255,0.22);
+        font-size: 13px;
+        letter-spacing: 0.5px;
       }
-      .touch .spacer { opacity: 0; pointer-events: none; }
-    </style>
-    
-    <script>
-      // ── Подводный сбор жемчуга ───────────────────────────────────────
-      // Механика: пловец исследует подводный грот (WASD/стрелки),
-      // собирает жемчуг и избегает медуз.
-      // Интерфейс: HTML “дайвер‑HUD” + карточки старта/результата.
+      #hudTop b { color: #fff2b1; }
 
+      #reticle {
+        position: fixed;
+        left: 50%; top: 50%;
+        transform: translate(-50%, -50%);
+        width: 46px; height: 46px;
+        opacity: 0.95;
+      }
+      #reticle::before, #reticle::after {
+        content: "";
+        position: absolute;
+        background: rgba(255, 242, 177, 0.9);
+        border-radius: 2px;
+        box-shadow: 0 0 18px rgba(255,242,177,0.25);
+      }
+      #reticle::before { width: 2px; height: 100%; left: 50%; top: 0; transform: translateX(-50%); }
+      #reticle::after  { width: 100%; height: 2px; left: 0; top: 50%; transform: translateY(-50%); }
+      #reticle .ring {
+        position: absolute;
+        left: 50%; top: 50%;
+        transform: translate(-50%, -50%);
+        width: 30px; height: 30px;
+        border: 2px solid rgba(120,225,255,0.6);
+        border-radius: 50%;
+      }
+
+      #flash {
+        position: fixed; inset: 0;
+        background: rgba(255,255,220,0.10);
+        opacity: 0;
+        transition: opacity 0.06s;
+        z-index: 15;
+        pointer-events: none;
+      }
+      #flash.on { opacity: 1; }
+    </style>
+
+    <script>
       const GAME = {
         state: 'menu', // menu | playing | gameover
         score: 0,
-        goal: 8,
-        timeLeft: 45,
-        mines: 3
+        goal: 10,
+        timeLeft: 35
       };
 
+      function setHud() {
+        const el = document.getElementById('hudText');
+        if (el) el.innerHTML = `ЖЕМЧУГ: <b>${GAME.score}/${GAME.goal}</b>  •  ВРЕМЯ: <b>${GAME.timeLeft}s</b>`;
+      }
+
       function sfx(volume = 0.55) {
-        const a = document.querySelector('#snd-shoot');
+        const a = document.querySelector('#snd-shot');
         if (!a) return;
         a.volume = volume;
         a.currentTime = 0;
         a.play().catch(() => {});
       }
 
-      function setHud() {
-        const scoreEl = document.getElementById('hudScore');
-        const timeEl = document.getElementById('hudTime');
-        if (scoreEl) scoreEl.textContent = `SCORE: ${GAME.score}/${GAME.goal}`;
-        if (timeEl) timeEl.textContent = `TIME: ${GAME.timeLeft}s`;
+      function showFlash() {
+        const f = document.getElementById('flash');
+        if (!f) return;
+        f.classList.add('on');
+        setTimeout(() => f.classList.remove('on'), 90);
       }
 
-      function showOverlay(which) {
-        document.getElementById('overlayStart').classList.remove('active');
-        document.getElementById('overlayOver').classList.remove('active');
-        if (which) document.getElementById(which).classList.add('active');
-        document.getElementById('ui').style.pointerEvents = which ? 'auto' : 'none';
-      }
-
-      function resetWorld() {
-        // убрать старые жемчужины/медузы/пузырьки
-        document.querySelectorAll('.pickup, .mine').forEach(el => el.parentNode && el.parentNode.removeChild(el));
-
-        // вернуть игрока в старт
-        const rig = document.querySelector('#playerRig');
-        if (rig) rig.setAttribute('position', '0 0 6');
-
-        // заспавнить жемчужины (статичные)
-        const scene = document.querySelector('a-scene');
-        const points = [
-          [-6, 0.6,  2], [-2, 0.6,  0], [ 2, 0.6,  1], [ 6, 0.6, -1],
-          [-6, 0.6, -3], [-1, 0.6, -4], [ 3, 0.6, -3], [ 6, 0.6,  3]
-        ];
-        points.forEach((p, i) => {
-          const cell = document.createElement('a-sphere');
-          cell.classList.add('pickup');
-          cell.setAttribute('position', `${p[0]} ${p[1]} ${p[2]}`);
-          cell.setAttribute('radius', '0.33');
-          cell.setAttribute('material', 'color: #fff2b1; emissive: #2dd4bf; emissiveIntensity: 0.15; metalness: 0.2; roughness: 0.08;');
-          cell.setAttribute('static-body', 'shape: sphere;');
-          cell.setAttribute('animation', 'property: rotation; to: 0 360 0; dur: 1800; loop: true; easing: linear');
-          cell.setAttribute('animation__bob', `property: position; to: ${p[0]} ${p[1] + 0.25} ${p[2]}; dur: 800; dir: alternate; loop: true; easing: easeInOutSine`);
-          cell.setAttribute('pickup-logic', `index: ${i}`);
-          scene.appendChild(cell);
-        });
-
-        // заспавнить медуз (динамические, с физикой)
-        for (let i = 0; i < GAME.mines; i++) {
-          const m = document.createElement('a-sphere');
-          m.classList.add('mine');
-          const x = (Math.random() - 0.5) * 10;
-          const z = (Math.random() - 0.5) * 10;
-          m.setAttribute('position', `${x} 0.8 ${z}`);
-          m.setAttribute('radius', '0.62');
-          m.setAttribute('material', 'color: #8b5cf6; emissive: #22d3ee; emissiveIntensity: 0.65; opacity: 0.72; transparent: true');
-          m.setAttribute('dynamic-body', 'shape: sphere; mass: 1.2; linearDamping: 0.02; angularDamping: 0.95;');
-          m.setAttribute('mine-ai', '');
-          m.setAttribute('animation', 'property: material.emissiveIntensity; from: 0.25; to: 1.05; dur: 520; dir: alternate; loop: true');
-          m.setAttribute('animation__pulse', 'property: scale; from: 1 1 1; to: 1.12 0.92 1.12; dur: 650; dir: alternate; loop: true; easing: easeInOutSine');
-          scene.appendChild(m);
-        }
+      function clearTargets() {
+        document.querySelectorAll('.pearl, .jelly').forEach(el => el.parentNode && el.parentNode.removeChild(el));
       }
 
       window.startGame = function () {
         GAME.state = 'playing';
         GAME.score = 0;
-        GAME.timeLeft = 45;
+        GAME.timeLeft = 35;
         setHud();
-        showOverlay(null);
-        resetWorld();
+        clearTargets();
+        document.getElementById('screenStart').classList.add('hidden');
+        document.getElementById('screenOver').classList.add('hidden');
       };
+
+      function endGame(kind) {
+        if (GAME.state !== 'playing') return;
+        GAME.state = 'gameover';
+        clearTargets();
+        document.getElementById('finalTitle').textContent = kind === 'WIN' ? 'СОКРОВИЩЕ СОБРАНО' : 'ВРЕМЯ ВЫШЛО';
+        document.getElementById('finalScore').textContent = `ЖЕМЧУГ: ${GAME.score}/${GAME.goal}`;
+        document.getElementById('screenOver').classList.remove('hidden');
+      }
 
       window.restartGame = function () {
         sfx(0.25);
         window.startGame();
       };
 
-      function endGame(kind) {
-        if (GAME.state !== 'playing') return;
-        GAME.state = 'gameover';
-
-        // подчистим динамику, чтобы всё остановилось
-        document.querySelectorAll('.mine').forEach(el => el.parentNode && el.parentNode.removeChild(el));
-
-        const title = document.getElementById('overTitle');
-        const score = document.getElementById('overScore');
-        if (title) title.textContent = kind === 'WIN' ? 'СОКРОВИЩЕ НАЙДЕНО' : 'КИСЛОРОД ЗАКОНЧИЛСЯ';
-        if (score) score.textContent = `SCORE: ${GAME.score}/${GAME.goal}`;
-        showOverlay('overlayOver');
-      }
-
-      // Таймер
       AFRAME.registerComponent('timer', {
         init: function () { this.acc = 0; },
         tick: function (t, dt) {
@@ -235,242 +186,206 @@
           this.acc = 0;
           GAME.timeLeft = Math.max(0, GAME.timeLeft - 1);
           setHud();
-          if (GAME.timeLeft <= 0) endGame('LOSE');
+          if (GAME.score >= GAME.goal) endGame('WIN');
+          else if (GAME.timeLeft <= 0) endGame('LOSE');
         }
       });
 
-      // Управление игроком (кинематическое движение по плоскости)
-      AFRAME.registerComponent('runner-controls', {
-        schema: { speed: { default: 4.4 } },
+      // Спавн жемчуга в зоне перед камерой (без перемещения игрока)
+      AFRAME.registerComponent('pearl-spawner', {
+        init: function () { this.t = 0; this.jt = 0; },
+        tick: function (t, dt) {
+          if (GAME.state !== 'playing') return;
+          this.t += dt;
+          this.jt += dt;
+          if (this.t > 900) { this.spawnPearl(); this.t = 0; }
+          if (this.jt > 1600) { this.spawnJelly(); this.jt = 0; }
+        },
+        spawnPearl: function () {
+          const scene = this.el.sceneEl;
+          const p = document.createElement('a-sphere');
+          p.classList.add('pearl', 'shootable');
+
+          // случайная точка перед камерой
+          const x = (Math.random() - 0.5) * 3.2;
+          const y = 1.2 + (Math.random() - 0.5) * 1.3;
+          const z = -2.2 - Math.random() * 2.6;
+
+          p.setAttribute('position', `${x} ${y} ${z}`);
+          p.setAttribute('radius', '0.14');
+          p.setAttribute('material', 'color: #fff2b1; emissive: #2dd4bf; emissiveIntensity: 0.12; metalness: 0.25; roughness: 0.06;');
+          p.setAttribute('dynamic-body', 'shape: sphere; mass: 0.2;');
+          p.setAttribute('linear-damping', '0.99');
+          p.setAttribute('angular-damping', '0.99');
+          p.setAttribute('animation', 'property: rotation; to: 0 360 0; dur: 1800; loop: true; easing: linear');
+          p.setAttribute('animation__bob', `property: position; to: ${x} ${y + 0.12} ${z}; dur: 600; dir: alternate; loop: true; easing: easeInOutSine`);
+          p.setAttribute('ttl', 'ms: 5200');
+
+          scene.appendChild(p);
+        },
+        spawnJelly: function () {
+          const scene = this.el.sceneEl;
+          const j = document.createElement('a-sphere');
+          j.classList.add('jelly', 'shootable');
+          const x = (Math.random() - 0.5) * 3.0;
+          const y = 1.1 + (Math.random() - 0.5) * 1.4;
+          const z = -2.8 - Math.random() * 2.2;
+          j.setAttribute('position', `${x} ${y} ${z}`);
+          j.setAttribute('radius', '0.20');
+          j.setAttribute('material', 'color: #8b5cf6; emissive: #22d3ee; emissiveIntensity: 0.55; opacity: 0.65; transparent: true');
+          j.setAttribute('dynamic-body', 'shape: sphere; mass: 0.6;');
+          j.setAttribute('linear-damping', '0.98');
+          j.setAttribute('angular-damping', '0.98');
+          j.setAttribute('animation__pulse', 'property: scale; from: 1 1 1; to: 1.12 0.92 1.12; dur: 650; dir: alternate; loop: true; easing: easeInOutSine');
+          j.setAttribute('ttl', 'ms: 4500');
+          scene.appendChild(j);
+        }
+      });
+
+      AFRAME.registerComponent('ttl', {
+        schema: { ms: { type: 'number', default: 4000 } },
         init: function () {
-          this.keys = { w: false, a: false, s: false, d: false, left: false, right: false, up: false, down: false };
-          this.onDown = (e) => {
-            if (GAME.state !== 'playing') return;
-            if (e.key === 'w' || e.key === 'ArrowUp') this.keys.w = this.keys.up = true;
-            if (e.key === 's' || e.key === 'ArrowDown') this.keys.s = this.keys.down = true;
-            if (e.key === 'a' || e.key === 'ArrowLeft') this.keys.a = this.keys.left = true;
-            if (e.key === 'd' || e.key === 'ArrowRight') this.keys.d = this.keys.right = true;
-          };
-          this.onUp = (e) => {
-            if (e.key === 'w' || e.key === 'ArrowUp') this.keys.w = this.keys.up = false;
-            if (e.key === 's' || e.key === 'ArrowDown') this.keys.s = this.keys.down = false;
-            if (e.key === 'a' || e.key === 'ArrowLeft') this.keys.a = this.keys.left = false;
-            if (e.key === 'd' || e.key === 'ArrowRight') this.keys.d = this.keys.right = false;
-          };
-          window.addEventListener('keydown', this.onDown);
-          window.addEventListener('keyup', this.onUp);
+          this.killAt = performance.now() + this.data.ms;
         },
-        remove: function () {
-          window.removeEventListener('keydown', this.onDown);
-          window.removeEventListener('keyup', this.onUp);
-        },
-        tick: function (t, dt) {
-          if (GAME.state !== 'playing') return;
-          const p = this.el.object3D.position;
-          const step = this.data.speed * (dt / 1000);
-          let dx = 0, dz = 0;
-          if (this.keys.w || this.keys.up) dz -= 1;
-          if (this.keys.s || this.keys.down) dz += 1;
-          if (this.keys.a || this.keys.left) dx -= 1;
-          if (this.keys.d || this.keys.right) dx += 1;
-          if (dx !== 0 || dz !== 0) {
-            const len = Math.hypot(dx, dz) || 1;
-            dx /= len; dz /= len;
-            p.x = THREE.MathUtils.clamp(p.x + dx * step, -8.2, 8.2);
-            p.z = THREE.MathUtils.clamp(p.z + dz * step, -8.2, 8.2);
-            const body = this.el.body;
-            if (body) body.position.set(p.x, p.y, p.z);
-          }
-        }
-      });
-
-      // Touch-кнопки (мобильные)
-      function press(dir, down) {
-        const rig = document.querySelector('#playerRig');
-        const ctrl = rig && rig.components['runner-controls'];
-        if (!ctrl) return;
-        if (dir === 'up') ctrl.keys.w = ctrl.keys.up = down;
-        if (dir === 'down') ctrl.keys.s = ctrl.keys.down = down;
-        if (dir === 'left') ctrl.keys.a = ctrl.keys.left = down;
-        if (dir === 'right') ctrl.keys.d = ctrl.keys.right = down;
-      }
-      window.touchDir = function (dir, down) {
-        if (GAME.state !== 'playing') return;
-        press(dir, down);
-      };
-
-      // Логика подбора жемчуга (через расстояние до игрока)
-      AFRAME.registerComponent('pickup-logic', {
-        schema: { index: { type: 'int', default: 0 } },
         tick: function () {
-          if (GAME.state !== 'playing') return;
-          const rig = document.querySelector('#playerRig');
-          if (!rig) return;
-          const p = rig.object3D.position;
-          const o = this.el.object3D.position;
-          const d = p.distanceTo(o);
-          if (d < 1.05) {
-            sfx(0.32);
-            GAME.score += 1;
-            setHud();
-
-            // анимация по событию на модели (Blender glb)
-            const model = document.querySelector('#shipModel');
-            if (model) model.emit('charge');
-
-            this.el.setAttribute('animation__pop', 'property: scale; to: 0 0 0; dur: 160; easing: easeInBack');
-            setTimeout(() => this.el.parentNode && this.el.parentNode.removeChild(this.el), 180);
-
-            if (GAME.score >= GAME.goal) endGame('WIN');
+          if (performance.now() > this.killAt) {
+            if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
           }
         }
       });
 
-      // AI медуз: раз в N мс подталкиваем импульсом к игроку
-      AFRAME.registerComponent('mine-ai', {
-        init: function () { this.acc = 0; },
-        tick: function (t, dt) {
-          if (GAME.state !== 'playing') return;
-          this.acc += dt;
-          if (this.acc < 650) return;
-          this.acc = 0;
-          const rig = document.querySelector('#playerRig');
-          if (!rig || !this.el.body) return;
-          const p = rig.object3D.position;
-          const o = this.el.object3D.position;
-          const vx = p.x - o.x;
-          const vz = p.z - o.z;
-          const len = Math.hypot(vx, vz) || 1;
-          const nx = vx / len;
-          const nz = vz / len;
-          this.el.body.applyImpulse(
-            new CANNON.Vec3(nx * 0.9, 0, nz * 0.9),
-            new CANNON.Vec3(0, 0, 0)
-          );
+      // Выстрел: raycast из центра камеры по объектам
+      function shoot() {
+        if (GAME.state !== 'playing') return;
+        showFlash();
+        sfx(0.45);
 
-          // “укус” медузы по расстоянию (надежно для kinematic)
-          if (Math.hypot(vx, vz) < 0.95) {
-            sfx(0.9);
-            const model = document.querySelector('#shipModel');
-            if (model) model.emit('hit');
-            endGame('LOSE');
-          }
+        const gun = document.querySelector('#gun');
+        if (gun) gun.emit('fire');
+
+        const cursor = document.querySelector('#cursor');
+        if (!cursor || !cursor.components.raycaster) return;
+        const hits = cursor.components.raycaster.intersectedEls;
+        if (!hits || hits.length === 0) return;
+        const hit = hits[0];
+
+        if (hit.classList.contains('pearl')) {
+          GAME.score += 1;
+          setHud();
+          hit.setAttribute('animation__pop', 'property: scale; to: 0 0 0; dur: 140; easing: easeInBack');
+          setTimeout(() => hit.parentNode && hit.parentNode.removeChild(hit), 160);
+          return;
         }
+
+        // Можно штрафовать за попадание в медузу, но пока просто визуально “лопаем”
+        if (hit.classList.contains('jelly')) {
+          hit.setAttribute('animation__pop', 'property: scale; to: 0 0 0; dur: 180; easing: easeInBack');
+          setTimeout(() => hit.parentNode && hit.parentNode.removeChild(hit), 200);
+        }
+      }
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest || e.target.closest('.overlay')) return;
+        shoot();
       });
+      document.addEventListener('touchstart', (e) => {
+        if (!e.target.closest || e.target.closest('.overlay')) return;
+        e.preventDefault();
+        shoot();
+      }, { passive: false });
     </script>
   </head>
   <body>
-    <!-- HTML интерфейс (совсем другой стиль, не A-Frame панели) -->
-    <div id="ui">
-      <div class="panel">
-        <div class="row"><span id="hudScore">SCORE: 0/8</span> <span id="hudTime">TIME: 45s</span></div>
-        <div class="row" style="opacity:0.85">WASD / стрелки • собери <b>8</b> жемчужин • избегай медуз</div>
-      </div>
+    <!-- HUD -->
+    <div id="hud">
+      <div id="hudTop"><span id="hudText">ЖЕМЧУГ: <b>0/10</b> • ВРЕМЯ: <b>35s</b></span></div>
+      <div id="reticle"><div class="ring"></div></div>
+      <div id="flash"></div>
+    </div>
 
-      <div id="overlayStart" class="overlay active">
-        <div class="card">
-          <div class="title">
-            <img src="assets/icon.jpg" alt="icon" />
-            <div>
-              <h2>ПОДВОДНЫЙ СБОР ЖЕМЧУГА</h2>
-              <div style="opacity:0.75; font-size:12px; margin-top:4px;">A‑Frame • физика • интерактивность</div>
-            </div>
-          </div>
-          <div class="desc">
-            Ты ныряешь в подводный грот. Собери <b>8</b> жемчужин за <b>45 секунд</b>.
-            <div class="muted" style="margin-top:8px">Медузы дрейфуют и тянутся к тебе. Касание — поражение.</div>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" onclick="startGame()">ПОПЛЫЛИ</button>
+    <!-- Оверлеи -->
+    <div id="screenStart" class="overlay">
+      <div class="card">
+        <div class="row">
+          <img src="assets/icon.jpg" alt="icon" />
+          <div>
+            <h2>AR: ОХОТА ЗА ЖЕМЧУГОМ</h2>
+            <div style="opacity:0.75; font-size:12px; margin-top:4px;">камера • интерактивность • физика</div>
           </div>
         </div>
-      </div>
-
-      <div id="overlayOver" class="overlay">
-        <div class="card">
-          <div class="title">
-            <img src="assets/icon.jpg" alt="icon" />
-            <div>
-              <h2 id="overTitle">SYSTEM FAILURE</h2>
-              <div id="overScore" style="opacity:0.85; margin-top:6px">SCORE: 0/8</div>
-            </div>
-          </div>
-          <div class="actions">
-            <button class="btn btn-danger" onclick="restartGame()">ЕЩЁ РАЗ</button>
-          </div>
+        <div class="desc">
+          Наводитесь прицелом (центр экрана) и <b>стреляйте тапом</b> по жемчужинам.<br>
+          Соберите <b>10</b> штук за <b>35 секунд</b>.
         </div>
-      </div>
-
-      <div class="touch" aria-label="touch controls">
-        <button class="spacer"> </button>
-        <button onpointerdown="touchDir('up', true)" onpointerup="touchDir('up', false)" onpointercancel="touchDir('up', false)">▲</button>
-        <button class="spacer"> </button>
-        <button onpointerdown="touchDir('left', true)" onpointerup="touchDir('left', false)" onpointercancel="touchDir('left', false)">◀</button>
-        <button onpointerdown="touchDir('down', true)" onpointerup="touchDir('down', false)" onpointercancel="touchDir('down', false)">▼</button>
-        <button onpointerdown="touchDir('right', true)" onpointerup="touchDir('right', false)" onpointercancel="touchDir('right', false)">▶</button>
+        <button class="btn" onclick="startGame()">НАЧАТЬ</button>
       </div>
     </div>
 
-    <a-scene physics="debug: false" timer fog="type: exponential; color: #003041; density: 0.08">
-      
+    <div id="screenOver" class="overlay hidden">
+      <div class="card">
+        <div class="row">
+          <img src="assets/icon.jpg" alt="icon" />
+          <div>
+            <h2 id="finalTitle">ВРЕМЯ ВЫШЛО</h2>
+            <div id="finalScore" style="opacity:0.85; margin-top:6px">ЖЕМЧУГ: 0/10</div>
+          </div>
+        </div>
+        <button class="btn btn-danger" onclick="restartGame()">ЕЩЁ РАЗ</button>
+      </div>
+    </div>
+
+    <a-scene
+      embedded
+      vr-mode-ui="enabled: false"
+      renderer="antialias: true; alpha: true"
+      physics="debug: false; gravity: 0 -0.3 0"
+      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; trackingMethod: best;"
+      timer
+      pearl-spawner
+    >
       <a-assets>
-        <img id="space-texture" src="assets/space.jpg">
-        <img id="ui-icon" src="assets/icon.jpg">
-        <a-asset-item id="ship-model" src="assets/turel.glb"></a-asset-item>
-        <!-- Аудио-файл -->
-        <audio id="snd-shoot" src="assets/shoot.mp3" preload="auto"></audio>
+        <img id="tex-sky" src="assets/space.jpg">
+        <img id="img-ui" src="assets/icon.jpg">
+        <a-asset-item id="mdl-harpoon" src="assets/turel.glb"></a-asset-item>
+        <audio id="snd-shot" src="assets/shoot.mp3" preload="auto"></audio>
       </a-assets>
 
-      <!-- Фон океана (текстура обязательна — используем ваш asset) -->
-      <a-sky src="#space-texture" rotation="0 -60 0" material="color: #0a3a4a"></a-sky>
+      <!-- a-sky (требование). В AR оставляем почти прозрачным, чтобы не перекрывал камеру -->
+      <a-sky src="#tex-sky" material="opacity: 0.02; transparent: true;"></a-sky>
 
-      <!-- Дно -->
-      <a-plane id="ground"
-               rotation="-90 0 0"
-               width="30" height="30"
+      <!-- Земля (виртуальное “дно”) + физика -->
+      <a-plane id="ground" rotation="-90 0 0" position="0 0 -3" width="30" height="30"
                static-body
-               material="src: #space-texture; repeat: 6 6; color: #083246; roughness: 1; metalness: 0"></a-plane>
+               material="src: #tex-sky; repeat: 6 6; color: #083246; opacity: 0.75; transparent: true"></a-plane>
 
-      <!-- Скалы/риф (статичная физика) -->
-      <a-entity id="maze">
-        <a-box static-body position="0 1 9"  width="18" height="2" depth="0.7" material="color:#072235; emissive:#0ea5e9; emissiveIntensity:0.12"></a-box>
-        <a-box static-body position="0 1 -9" width="18" height="2" depth="0.7" material="color:#072235; emissive:#0ea5e9; emissiveIntensity:0.12"></a-box>
-        <a-box static-body position="9 1 0"  width="0.7" height="2" depth="18" material="color:#072235; emissive:#0ea5e9; emissiveIntensity:0.12"></a-box>
-        <a-box static-body position="-9 1 0" width="0.7" height="2" depth="18" material="color:#072235; emissive:#0ea5e9; emissiveIntensity:0.12"></a-box>
+      <!-- Свет -->
+      <a-entity light="type: ambient; intensity: 0.95; color: #b8f2ff"></a-entity>
+      <a-entity light="type: directional; intensity: 0.85; color: #7ad7ff" position="1 4 3"></a-entity>
 
-        <a-box static-body position="-4 1 5" width="8" height="2" depth="0.7" material="color:#06314a; emissive:#2dd4bf; emissiveIntensity:0.10"></a-box>
-        <a-box static-body position="4 1 3"  width="8" height="2" depth="0.7" material="color:#06314a; emissive:#2dd4bf; emissiveIntensity:0.10"></a-box>
-        <a-box static-body position="0 1 1"  width="0.7" height="2" depth="8" material="color:#06314a; emissive:#2dd4bf; emissiveIntensity:0.10"></a-box>
-        <a-box static-body position="-2 1 -3" width="10" height="2" depth="0.7" material="color:#06314a; emissive:#2dd4bf; emissiveIntensity:0.10"></a-box>
-        <a-box static-body position="5 1 -5" width="0.7" height="2" depth="8" material="color:#06314a; emissive:#2dd4bf; emissiveIntensity:0.10"></a-box>
-      </a-entity>
+      <!-- Камера (AR) + невидимый курсор-рейкастер из центра -->
+      <a-entity id="cameraRig">
+        <a-camera id="camera" position="0 1.6 0">
+          <a-entity id="cursor"
+                    cursor="rayOrigin: entity; fuse: false"
+                    raycaster="objects: .shootable; far: 20"
+                    position="0 0 -1"
+                    geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.02"
+                    material="opacity: 0; transparent: true">
+          </a-entity>
+        </a-camera>
 
-      <!-- Игрок: родитель (rig) + потомки (камера, модель). Модель = “батискаф/пловец”. -->
-      <a-entity id="playerRig" position="0 0 6" runner-controls kinematic-body="shape: box; radius: 0;">
-        <a-entity id="camera" camera look-controls position="0 1.6 2.8" rotation="-10 180 0"></a-entity>
-
-        <!-- 3D модель (Blender) -->
-        <a-entity id="shipModel"
-                  gltf-model="#ship-model"
-                  position="0 0.3 0"
-                  rotation="0 180 0"
-                  scale="0.22 0.22 0.22"
-                  animation__float="property: position; from: 0 0.28 0; to: 0 0.38 0; dir: alternate; dur: 900; loop: true"
-                  animation__charge="property: scale; from: 0.22 0.22 0.22; to: 0.27 0.27 0.27; dur: 120; dir: alternate; repeat: 1; startEvents: charge"
-                  animation__hit="property: rotation; from: 0 180 0; to: 0 260 0; dur: 120; dir: alternate; repeat: 2; startEvents: hit">
+        <!-- “Оружие”/фигура по тематике: 3D модель (Blender) как гарпун/ракушка -->
+        <!-- Трансформация предок/потомок: cameraRig -> gun -> deco image -->
+        <a-entity id="gun" position="0 0.95 -0.8" rotation="0 180 0" scale="0.18 0.18 0.18"
+                  gltf-model="#mdl-harpoon"
+                  animation__idle="property: rotation; to: 0 190 0; dur: 1100; dir: alternate; loop: true; easing: easeInOutSine"
+                  animation__fire="property: position; from: 0 0.95 -0.8; to: 0 0.95 -0.72; dur: 60; dir: alternate; repeat: 1; startEvents: fire">
+          <a-image src="#img-ui" position="0.0 1.1 0.0" width="0.6" height="0.6" opacity="0.9"></a-image>
         </a-entity>
       </a-entity>
 
-      <!-- Внутрисценовый текст (обязательный элемент) -->
-      <a-text value="ЖЕМЧУГ ➜" position="7.2 1.4 -7.8" rotation="0 -135 0" color="#fff2b1" width="8"></a-text>
-
-      <!-- A-Frame изображение (обязательный элемент) -->
-      <a-image src="#ui-icon" position="-7.8 2.2 7.6" rotation="0 45 0" width="1.2" height="1.2"></a-image>
-
-      <!-- Свет -->
-      <a-entity light="type: ambient; intensity: 0.85; color: #7ad7ff"></a-entity>
-      <a-entity light="type: directional; intensity: 0.9; color: #b8f2ff" position="1 5 3"></a-entity>
-
+      <!-- Текст (внутри сцены) -->
+      <a-text value="tap to shoot" position="0 2.2 -2.2" align="center" width="6" color="#fff2b1"></a-text>
     </a-scene>
   </body>
 </html>
