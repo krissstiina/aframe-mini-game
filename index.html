@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Crystal Courier</title>
+    <!-- Основная библиотека A-Frame -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- Физика -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+    
+    <script>
+      // ── Crystal Courier ──────────────────────────────────────────────
+      // Механика: собери кристаллы (очки) и избегай мин (game over).
+      // Управление: A/D или ←/→ (на мобильных можно нажимать по кнопкам).
+
+      const GAME = {
+        state: 'menu',        // menu | playing | gameover
+        score: 0,
+        timeLeft: 35,         // секунд
+        targetScore: 12,
+        lastSpawnAt: 0,
+        spawnEveryMs: 650
+      };
+
+      function setText(id, value) {
+        const el = document.querySelector(id);
+        if (el) el.setAttribute('value', value);
+      }
+
+      function show(elId, pos) {
+        const el = document.querySelector(elId);
+        if (el) el.setAttribute('position', pos);
+      }
+
+      function clearFalling() {
+        document.querySelectorAll('.falling').forEach(el => el.parentNode && el.parentNode.removeChild(el));
+      }
+
+      function playSfx(id, volume = 0.8) {
+        const a = document.querySelector(id);
+        if (!a) return;
+        a.volume = volume;
+        a.currentTime = 0;
+        a.play().catch(() => {});
+      }
+
+      window.startGame = function startGame() {
+        GAME.state = 'playing';
+        GAME.score = 0;
+        GAME.timeLeft = 35;
+        GAME.lastSpawnAt = 0;
+
+        clearFalling();
+        show('#screenStart', '0 -100 0');
+        show('#screenOver', '0 -100 0');
+
+        document.querySelector('#hud').setAttribute('visible', 'true');
+        setText('#hudScore', `SCORE: 0 / ${GAME.targetScore}`);
+        setText('#hudTime', `TIME: ${GAME.timeLeft}s`);
+
+        const player = document.querySelector('#player');
+        if (player) player.setAttribute('position', '0 0 -2.5');
+      };
+
+      window.endGame = function endGame(reason = 'CRASH') {
+        if (GAME.state !== 'playing') return;
+        GAME.state = 'gameover';
+
+        document.querySelector('#hud').setAttribute('visible', 'false');
+        clearFalling();
+
+        setText('#finalTitle', reason === 'WIN' ? 'DELIVERY COMPLETE' : 'SHIP DESTROYED');
+        setText('#finalScore', `SCORE: ${GAME.score}`);
+        show('#screenOver', '0 1.7 -4');
+      };
+
+      // ── Игровой цикл (таймер) ──
+      AFRAME.registerComponent('game-loop', {
+        init: function () { this.acc = 0; },
+        tick: function (time, dt) {
+          if (GAME.state !== 'playing') return;
+          this.acc += dt;
+          if (this.acc >= 1000) {
+            this.acc = 0;
+            GAME.timeLeft = Math.max(0, GAME.timeLeft - 1);
+            setText('#hudTime', `TIME: ${GAME.timeLeft}s`);
+            if (GAME.score >= GAME.targetScore) window.endGame('WIN');
+            else if (GAME.timeLeft <= 0) window.endGame('TIMEOUT');
+          }
+        }
+      });
+
+      // ── Спавнер объектов (кристаллы/мины) ──
+      AFRAME.registerComponent('falling-spawner', {
+        tick: function (time, dt) {
+          if (GAME.state !== 'playing') return;
+          if (!GAME.lastSpawnAt) GAME.lastSpawnAt = time;
+          if (time - GAME.lastSpawnAt < GAME.spawnEveryMs) return;
+          GAME.lastSpawnAt = time;
+
+          const isMine = Math.random() < 0.28;
+          const x = (Math.random() - 0.5) * 10;
+          const z = -6 - Math.random() * 8;
+          const y = 10 + Math.random() * 3;
+
+          const el = document.createElement(isMine ? 'a-sphere' : 'a-box');
+          el.classList.add('falling');
+          el.classList.add(isMine ? 'mine' : 'crystal');
+
+          el.setAttribute('position', `${x} ${y} ${z}`);
+          el.setAttribute('dynamic-body', `shape: ${isMine ? 'sphere' : 'box'}; mass: ${isMine ? 1.8 : 0.8};`);
+          el.setAttribute('linear-damping', '0.01');
+          el.setAttribute('angular-damping', '0.9');
+          el.setAttribute('shadow', '');
+
+          if (isMine) {
+            el.setAttribute('radius', '0.7');
+            el.setAttribute('material', 'color: #ff2b2b; emissive: #aa0000; emissiveIntensity: 0.8');
+            el.setAttribute(
+              'animation',
+              'property: material.emissiveIntensity; from: 0.4; to: 1.2; dur: 450; dir: alternate; loop: true'
+            );
+          } else {
+            el.setAttribute('depth', '0.7');
+            el.setAttribute('height', '0.7');
+            el.setAttribute('width', '0.7');
+            el.setAttribute('material', 'src: #ui-icon; color: #88fff5; metalness: 0.7; roughness: 0.15');
+            el.setAttribute('animation', 'property: rotation; to: 0 360 0; dur: 1200; loop: true; easing: linear');
+          }
+
+          el.setAttribute('cleanup-below', 'y: -5');
+          this.el.sceneEl.appendChild(el);
+        }
+      });
+
+      // ── Удаление объектов ниже земли ──
+      AFRAME.registerComponent('cleanup-below', {
+        schema: { y: { type: 'number', default: -5 } },
+        tick: function () {
+          if (this.el.object3D.position.y < this.data.y) {
+            if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
+          }
+        }
+      });
+
+      // ── “Ловушка” игрока: коллизии (физика) ──
+      AFRAME.registerComponent('collector', {
+        init: function () {
+          this.el.addEventListener('collide', (e) => {
+            if (GAME.state !== 'playing') return;
+            const other = e.detail && e.detail.body && e.detail.body.el;
+            if (!other) return;
+
+            if (other.classList.contains('crystal')) {
+              playSfx('#snd-shoot', 0.35);
+              GAME.score += 1;
+              setText('#hudScore', `SCORE: ${GAME.score} / ${GAME.targetScore}`);
+
+              other.setAttribute('animation__pop', 'property: scale; to: 0 0 0; dur: 140; easing: easeInBack');
+              setTimeout(() => other.parentNode && other.parentNode.removeChild(other), 160);
+
+              const ship = document.querySelector('#shipModel');
+              if (ship) ship.emit('charge'); // анимация по событию
+
+              if (GAME.score >= GAME.targetScore) window.endGame('WIN');
+              return;
+            }
+
+            if (other.classList.contains('mine')) {
+              playSfx('#snd-shoot', 0.9);
+              const ship = document.querySelector('#shipModel');
+              if (ship) ship.emit('hit'); // анимация по событию
+              window.endGame('CRASH');
+            }
+          });
+        }
+      });
+
+      // ── Управление: клавиши + кнопки ──
+      AFRAME.registerComponent('lane-controls', {
+        schema: { speed: { default: 6 } },
+        init: function () {
+          this.dir = 0;
+          this.targetDir = 0;
+          this.keyDown = this.keyDown.bind(this);
+          this.keyUp = this.keyUp.bind(this);
+          window.addEventListener('keydown', this.keyDown);
+          window.addEventListener('keyup', this.keyUp);
+        },
+        remove: function () {
+          window.removeEventListener('keydown', this.keyDown);
+          window.removeEventListener('keyup', this.keyUp);
+        },
+        keyDown: function (e) {
+          if (GAME.state !== 'playing') return;
+          if (e.key === 'a' || e.key === 'ArrowLeft') this.targetDir = -1;
+          if (e.key === 'd' || e.key === 'ArrowRight') this.targetDir = 1;
+        },
+        keyUp: function (e) {
+          if (e.key === 'a' || e.key === 'ArrowLeft' || e.key === 'd' || e.key === 'ArrowRight') {
+            this.targetDir = 0;
+          }
+        },
+        tick: function (t, dt) {
+          if (GAME.state !== 'playing') return;
+          // плавное “прилипание” к направлению
+          this.dir += (this.targetDir - this.dir) * Math.min(1, dt / 90);
+          const p = this.el.object3D.position;
+          p.x = THREE.MathUtils.clamp(p.x + this.dir * this.data.speed * (dt / 1000), -4.8, 4.8);
+        }
+      });
+
+      AFRAME.registerComponent('ui-click', {
+        schema: { action: { type: 'string' } },
+        init: function () {
+          this.el.classList.add('clickable');
+          this.el.addEventListener('click', () => {
+            if (this.data.action === 'start' && GAME.state === 'menu') window.startGame();
+            if (this.data.action === 'restart' && GAME.state === 'gameover') window.startGame();
+            if (this.data.action === 'left' && GAME.state === 'playing') {
+              const ctrl = document.querySelector('#player').components['lane-controls'];
+              if (ctrl) ctrl.targetDir = -1;
+              setTimeout(() => { if (ctrl) ctrl.targetDir = 0; }, 160);
+            }
+            if (this.data.action === 'right' && GAME.state === 'playing') {
+              const ctrl = document.querySelector('#player').components['lane-controls'];
+              if (ctrl) ctrl.targetDir = 1;
+              setTimeout(() => { if (ctrl) ctrl.targetDir = 0; }, 160);
+            }
+            playSfx('#snd-shoot', 0.2);
+          });
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <a-scene physics="debug: false" game-loop falling-spawner>
+      
+      <a-assets>
+        <img id="space-texture" src="assets/space.jpg">
+        <img id="ui-icon" src="assets/icon.jpg">
+        <a-asset-item id="ship-model" src="assets/turel.glb"></a-asset-item>
+        <!-- Аудио-файл -->
+        <audio id="snd-shoot" src="assets/shoot.mp3" preload="auto"></audio>
+      </a-assets>
+
+      <a-sky src="#space-texture"></a-sky>
+
+      <!-- Земля (платформа) -->
+      <a-box id="ground"
+             static-body
+             position="0 -1 0"
+             width="60" height="2" depth="60"
+             material="color: #0b0f1a; roughness: 1; metalness: 0"></a-box>
+
+      <!-- ИГРОК (предок/потомки) -->
+      <a-entity id="player"
+                position="0 0 -2.5"
+                lane-controls
+                kinematic-body="shape: box; radius: 0.0;">
+
+        <!-- “Капсула” игрока для физики (потомок) -->
+        <a-box id="collectorBox"
+               position="0 1.0 0"
+               width="1.4" height="1.2" depth="1.4"
+               opacity="0"
+               collector></a-box>
+
+        <!-- 3D модель (потомок), анимации по событию -->
+        <a-entity id="shipModel"
+                  gltf-model="#ship-model"
+                  position="0 0.25 0"
+                  rotation="0 180 0"
+                  scale="0.28 0.28 0.28"
+                  animation__float="property: position; from: 0 0.22 0; to: 0 0.30 0; dir: alternate; dur: 900; loop: true"
+                  animation__charge="property: scale; from: 0.28 0.28 0.28; to: 0.34 0.34 0.34; dur: 120; dir: alternate; repeat: 1; startEvents: charge"
+                  animation__hit="property: rotation; from: 0 180 0; to: 0 240 0; dur: 120; dir: alternate; repeat: 2; startEvents: hit">
+        </a-entity>
+      </a-entity>
+
+      <!-- HUD (потомки интерфейса) -->
+      <a-entity id="hud" position="0 0 0" visible="false">
+        <a-text id="hudScore" value="SCORE: 0 / 12" position="-2.7 2.7 -3" color="#66fff6" width="8"></a-text>
+        <a-text id="hudTime"  value="TIME: 35s" position="2.0 2.7 -3" color="#ffd24a" width="8" align="right"></a-text>
+      </a-entity>
+
+      <!-- ЭКРАН СТАРТА (другой интерфейс) -->
+      <a-entity id="screenStart" position="0 1.7 -4">
+        <a-plane width="6.2" height="3.4" material="color: #07101a; opacity: 0.92" radius="0.12"></a-plane>
+        <a-image src="#ui-icon" position="-2.35 0.8 0.02" scale="1.1 1.1 1.1"></a-image>
+        <a-text value="CRYSTAL COURIER" position="0.2 1.1 0.02" align="center" color="#66fff6" width="12"></a-text>
+        <a-text value="Собери 12 кристаллов за 35 секунд.\nМины = мгновенный проигрыш.\nУправление: A/D или стрелки." position="0 -0.05 0.02" align="center" color="#cbd5e1" width="11"></a-text>
+        <a-plane id="btnStart" ui-click="action: start" width="4.6" height="0.9" position="0 -1.15 0.03"
+                 material="color: #4cffb0"
+                 animation="property: scale; to: 1.04 1.04 1.04; dir: alternate; dur: 700; loop: true">
+          <a-text value="START DELIVERY" color="#00110a" align="center" width="10" position="0 0 0.02"></a-text>
+        </a-plane>
+      </a-entity>
+
+      <!-- ЭКРАН РЕЗУЛЬТАТОВ -->
+      <a-entity id="screenOver" position="0 -100 0">
+        <a-plane width="6.2" height="3.0" material="color: #14060a; opacity: 0.92" radius="0.12"></a-plane>
+        <a-text id="finalTitle" value="SHIP DESTROYED" position="0 0.9 0.02" align="center" color="#ff6b6b" width="12"></a-text>
+        <a-text id="finalScore" value="SCORE: 0" position="0 0.25 0.02" align="center" color="#ffd24a" width="12"></a-text>
+        <a-plane id="btnRestart" ui-click="action: restart" width="4.6" height="0.9" position="0 -0.9 0.03"
+                 material="color: #ff4d4d"
+                 animation="property: scale; to: 1.04 1.04 1.04; dir: alternate; dur: 700; loop: true">
+          <a-text value="RESTART" color="white" align="center" width="10" position="0 0 0.02"></a-text>
+        </a-plane>
+      </a-entity>
+
+      <!-- Кнопки (мобильный) -->
+      <a-entity id="mobileControls" position="0 0 0">
+        <a-plane ui-click="action: left"  position="-1.6 0.5 -2.2" width="1.2" height="0.7" material="color: #0ea5e9; opacity: 0.85">
+          <a-text value="◀" align="center" color="white" width="4" position="0 0 0.02"></a-text>
+        </a-plane>
+        <a-plane ui-click="action: right" position="1.6 0.5 -2.2" width="1.2" height="0.7" material="color: #0ea5e9; opacity: 0.85">
+          <a-text value="▶" align="center" color="white" width="4" position="0 0 0.02"></a-text>
+        </a-plane>
+      </a-entity>
+
+      <!-- Камера и курсор (интерактивность по клику) -->
+      <a-entity id="cameraRig" position="0 1.6 0">
+        <a-entity id="camera" camera look-controls></a-entity>
+        <a-entity id="cursor"
+                  cursor="rayOrigin: mouse; fuse: false"
+                  raycaster="objects: .clickable; far: 50"
+                  position="0 0 -1"
+                  geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
+                  material="color: #ffd24a; shader: flat">
+        </a-entity>
+      </a-entity>
+
+      <!-- Свет -->
+      <a-entity light="type: ambient; intensity: 0.7"></a-entity>
+      <a-entity light="type: directional; intensity: 1" position="1 4 3"></a-entity>
+
+    </a-scene>
+  </body>
+</html>
